@@ -1,0 +1,97 @@
+---
+title: "Inshore density calculations"
+author: "MZD"
+date: "4/15/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+Load data
+```{r}
+tx.catch <- read_csv("tpwd-trawl-catch.csv")
+tx.lengths <-read_csv("tpwd-trawl-lengths.csv")
+```
+
+```{r}
+tx.catch
+tx.lengths
+```
+
+Need to convert dttm into datetime, create a year column, and create a sample ID column:
+
+```{r}
+tx.catch <- tx.catch %>% 
+  mutate(dt = dmy_hms(completion_dttm)) %>% 
+  mutate(year = year(dt)) %>% 
+  mutate(trawl_id = paste(major_area_code,station_code,date(dt),sep = "-"))
+tx.catch
+```
+
+```{r}
+tx.lengths <- tx.lengths %>% 
+  mutate(dt = dmy_hms(completion_dttm)) %>% 
+  mutate(year = year(dt)) %>% 
+  mutate(trawl_id = paste(major_area_code,station_code,date(dt),sep = "-"))
+tx.lengths
+```
+
+In lengths dataset, set maturity stage code as factor and rename:
+```{r}
+tx.lengths <- tx.lengths %>% 
+  mutate(maturity_stage_code = factor(maturity_stage_code)) %>% 
+  mutate(mature_female = recode(maturity_stage_code, 
+                           "1" = "N",
+                           "2" = "Y",
+                           "3" = "Y",
+                           "4" = "Y",
+                           "5" = "N",
+                           "6" = "N",
+                           "0" = "N",
+                           "8" = "Y",
+                           "9" = "N"))
+tx.lengths
+```
+```{r}
+table(tx.lengths$mature_female)
+```
+Now need to count how many mature females in each sample, add to new column in catch dataset:
+
+```{r}
+mat.fem.counts<- tx.catch %>% 
+  full_join(tx.lengths, by = "trawl_id") %>% 
+  filter(mature_female == "Y") %>% 
+  group_by(trawl_id) %>% 
+  tally() %>% 
+  rename(mature_females = n)
+mat.fem.counts
+```
+
+```{r}
+sum(mat.fem.counts$mature_females)
+```
+
+Now convert to crabs/ha based on 4.8 km/hr tow speed and 6.1-m trawl width"
+
+```{r}
+tx.catch.matfem <- tx.catch %>% 
+  left_join(mat.fem.counts, by = "trawl_id") %>% 
+  mutate(mature_females = replace_na(mature_females, 0)) %>% 
+  mutate(matfem_per_ha = mature_females / (6.1*4800*elapsed_time/10000))
+tx.catch.matfem
+```
+```{r}
+sum(tx.catch.matfem$mature_females)
+```
+
+
+
+```{r}
+write_csv(tx.catch.matfem,"tx-catch-matfem.csv")
+write_csv(tx.lengths,"tx-lengths.csv")
+
+```
+
