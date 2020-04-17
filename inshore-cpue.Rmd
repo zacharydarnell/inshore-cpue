@@ -27,6 +27,7 @@ Need to convert dttm into datetime, create a year column, and create a sample ID
 tx.catch <- tx.catch %>% 
   mutate(dt = dmy_hms(completion_dttm)) %>% 
   mutate(year = year(dt)) %>% 
+  mutate(month = month(dt)) %>% 
   mutate(trawl_id = paste(major_area_code,station_code,date(dt),sep = "-"))
 tx.catch
 ```
@@ -125,6 +126,19 @@ tx.catch %>%
 ```
 
 ```{r}
+months<- tx.catch %>% 
+ group_by(month) %>% 
+ summarise(mean.mature = mean(mature_females), mean.ovigerous = mean(ovigerous)) 
+months
+```
+
+```{r}
+plot(months$month, months$mean.mature)
+plot(months$month, months$mean.ovigerous)
+```
+
+
+```{r}
 write_csv(tx.catch,"generated/tx-catch-matfem.csv")
 write_csv(tx.lengths,"generated/tx-lengths.csv")
 
@@ -163,16 +177,29 @@ tx.annual.crabs.sg
 Now calculate total in all inshore major bays, and join to sg-only data:
 ```{r}
 tx.annual.crabs <- tx.catch %>% 
+  filter(major_area_code < 17) %>% 
   group_by(year) %>% 
   summarise(mean.mat.cpue = mean(matfem_per_ha)) %>% 
   mutate(total = mean.mat.cpue * sum(major.bays$Hectares)) %>% 
   left_join(tx.annual.crabs.sg, by = "year")
 tx.annual.crabs
+
+```
+
+Calculate total based only on June and July in all inshore major bays:
+```{r}
+tx.mo.crabs <- tx.catch %>% 
+  filter(major_area_code < 17) %>% 
+  filter(month == 6 | month ==7) %>% 
+  group_by(year) %>% 
+  summarise(mean.mat.cpue = mean(matfem_per_ha)) %>% 
+  mutate(total = mean.mat.cpue * sum(major.bays$Hectares)) 
+tx.mo.crabs
 ```
 
 Overall mean TX inshore:
 ```{r}
-mean(tx.annual.crabs$total)
+mean(tx.mo.crabs$total)
 ```
 
 
