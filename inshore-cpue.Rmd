@@ -21,8 +21,7 @@ tx.catch
 tx.lengths
 ```
 
-Need to convert dttm into datetime, create a year column, and create a sample ID column:
-
+Need to convert dttm into datetime, create year, month, sample ID columna:
 ```{r}
 tx.catch <- tx.catch %>% 
   mutate(dt = dmy_hms(completion_dttm)) %>% 
@@ -40,7 +39,7 @@ tx.lengths <- tx.lengths %>%
 tx.lengths
 ```
 
-In lengths dataset, set maturity stage code as factor and classify as mature or not and ovig or not:
+In lengths dataset, set maturity stage code as factor and classify as mature or not (mature_female) and ovigerous or not (ovigerous):
 ```{r}
 tx.lengths <- tx.lengths %>% 
   mutate(maturity_stage_code = factor(maturity_stage_code)) %>% 
@@ -69,8 +68,8 @@ tx.lengths
 ```{r}
 table(tx.lengths$mature_female)
 ```
-Now need to count how many mature females in each sample, add to new column in catch dataset:
 
+Count how many mature females in each sample, create new dataframe:
 ```{r}
 mat.fem.counts<- tx.catch %>% 
   full_join(tx.lengths, by = "trawl_id") %>% 
@@ -85,7 +84,7 @@ mat.fem.counts
 sum(mat.fem.counts$mature_females)
 ```
 
-Now same for ovigerous females
+Now same for ovigerous females:
 ```{r}
 ovig.counts<- tx.catch %>% 
   full_join(tx.lengths, by = "trawl_id") %>% 
@@ -100,8 +99,9 @@ sum(ovig.counts$ovigerous)
 ```
 
 
-Now convert join counts to tx.catch, mature females to crabs/ha based on 4.8 km/hr tow speed and 6.1-m trawl width"
-
+Now join mature female and ovig female dataframes to tx.catch, mature females to crabs/ha based on 4.8 km/hr tow speed and 6.1-m trawl width, as follows:
+mature females per hectare = (# of mature females caught) /
+     (6.1 m trawl width) * (4800 m/hr speed) * (elapsed_time in h) * (1 hectare/ 10,000 m^2)
 ```{r}
 tx.catch <- tx.catch %>% 
   left_join(mat.fem.counts, by = "trawl_id") %>% 
@@ -116,15 +116,15 @@ sum(tx.catch$mature_females)
 sum(tx.catch$ovigerous)
 ```
 
-Check catch per hour, see if appx. matches Anderson et al. 2017 (0.024 ovigerous per sample):
+Check catch per sample for 2006-2016, see if appx. matches Anderson et al. 2017 (0.024 ovigerous per sample):
 ```{r}
 tx.catch %>% 
   filter(year < 2017) %>% 
- #group_by(year) %>% 
   summarise(mean.mature = mean(mature_females), mean.ovigerous = mean(ovigerous)) 
 
 ```
 
+Summarize catch by month:
 ```{r}
 months<- tx.catch %>% 
  group_by(month) %>% 
@@ -137,7 +137,7 @@ plot(months$month, months$mean.mature)
 plot(months$month, months$mean.ovigerous)
 ```
 
-
+Write to CSV:
 ```{r}
 write_csv(tx.catch,"generated/tx-catch-matfem.csv")
 write_csv(tx.lengths,"generated/tx-lengths.csv")
@@ -151,42 +151,25 @@ Land layer = /Users/mzd/The University of Southern Mississippi/Craboratory - Doc
 
 Processing documented in /Users/mzd/Dropbox (The Craboratory)/RESEARCH/projects/seamap_2017/data-and-analyses/Inshore-cpue/gis/tx-inshore-cpue-calcs.model3
 
+Could use only peak spawning grounds, but most appropriate to use full estuarine area (total major bay area):
+
 #Back to R
 ```{r}
-tx.spawning.grounds <- read_csv("generated/tx-spawning-grounds.csv")
 major.bays <- read_csv("raw/major-bays.csv")
-tx.spawning.grounds.catch <- read_csv("generated/tx-spawning-grounds-catch.csv")
 ```
 
-Calculate total area of inshore spawning grounds:
-```{r}
-isg.area <- sum(tx.spawning.grounds$area_ha)
-isg.area
-```
-
-Calculate mean mature female catch per ha and total # of mature female crabs in inshore spawning grounds per year:
-```{r}
-tx.annual.crabs.sg <- tx.spawning.grounds.catch %>% 
-  group_by(year) %>% 
-  summarise(mean.mat.cpue.sg = mean(matfem_per_ha)) %>% 
-  mutate(total.in.sg = mean.mat.cpue.sg * sum(tx.spawning.grounds$area_ha))
-tx.annual.crabs.sg
-```
-
-
-Now calculate total in all inshore major bays, and join to sg-only data:
+Calculate mean mature female catch per ha and total # of mature female crabs in TX estuarine waters per year, based on all months:
 ```{r}
 tx.annual.crabs <- tx.catch %>% 
-  filter(major_area_code < 17) %>% 
+  filter(major_area_code < 17) %>% #limits to only the estuarine bays, not the offshore areas
   group_by(year) %>% 
   summarise(mean.mat.cpue = mean(matfem_per_ha)) %>% 
-  mutate(total = mean.mat.cpue * sum(major.bays$Hectares)) %>% 
-  left_join(tx.annual.crabs.sg, by = "year")
+  mutate(total = mean.mat.cpue * sum(major.bays$Hectares)) 
 tx.annual.crabs
 
 ```
 
-Calculate total based only on June and July in all inshore major bays:
+Calculate total based only on June and July in all major bays:
 ```{r}
 tx.mo.crabs <- tx.catch %>% 
   filter(major_area_code < 17) %>% 
@@ -196,25 +179,6 @@ tx.mo.crabs <- tx.catch %>%
   mutate(total = mean.mat.cpue * sum(major.bays$Hectares)) 
 tx.mo.crabs
 ```
-
-Overall mean TX inshore:
-```{r}
-mean(tx.mo.crabs$total)
-```
-
-
-Overall mean TX offshore:
-```{r}
-0.1 * 5147685
-```
-
-
-
-Average x area = total number:
-```{r}
-mean(tx.spawning.grounds.catch$matfem_per_ha) * sum(tx.spawning.grounds$area_ha)
-```
-
 
 
 
